@@ -1,0 +1,74 @@
+# Latch and Lock Related Diagnostic Rules
+
+rules:
+  - id: HIGH_LATCH_FREE_WAIT
+    name: "Latch争用过高"
+    category: wait_event
+    severity: high
+    description: |
+      latch free等待事件占DB Time超过10%。
+      Latch是Oracle内部的轻量级锁,用于保护内存结构。
+      Latch争用通常表明:
+      1. Shared Pool Latch争用(大量硬解析)
+      2. Cache Buffers Chains Latch争用(热块问题)
+      3. Library Cache Latch争用
+    conditions:
+      - metric: wait_events.latch_free.pct_db_time
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 使用AWR报告的Latch统计部分定位具体Latch
+      2. 对于Shared Pool Latch: 使用绑定变量,减少硬解析
+      3. 对于Cache Buffers Chains: 检查热块,考虑使用反向索引
+      4. 增加相关内存区域(如Shared Pool)
+      5. 检查是否有SQL执行计划频繁失效
+      6. 考虑使用结果集缓存减轻Shared Pool压力
+
+  - id: HIGH_ENQUEUE_WAIT
+    name: "Enqueue锁等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      enqueue相关等待事件占DB Time超过15%。
+      Enqueue是Oracle的队列锁机制,用于保护数据库对象。
+      常见的enqueue等待包括:
+      1. TX enqueue - 行级锁、索引块分裂
+      2. TM enqueue - 表级锁
+      3. HW enqueue - 高水位线争用
+    conditions:
+      - metric: wait_events.enq%.pct_db_time
+        operator: ">"
+        threshold: 15
+    recommendation: |
+      建议采取以下措施:
+      1. 检查AWR报告的Enqueue统计,定位具体的Enqueue类型
+      2. TX enqueue: 检查是否有锁等待,优化事务大小
+      3. TM enqueue: 检查是否有DDL操作,添加外键索引
+      4. HW enqueue: 使用ASSM(Automatic Segment Space Management)
+      5. 减少事务持有时间,尽早提交或回滚
+      6. 检查是否有长事务阻塞其他会话
+
+  - id: HIGH_BUFFER_BUSY_WAITS
+    name: "Buffer busy waits过高"
+    category: wait_event
+    severity: medium
+    description: |
+      buffer busy waits等待事件占DB Time超过5%。
+      这个等待发生在多个会话尝试同时访问Buffer Cache中同一块。
+      常见原因:
+      1. 数据块热点(Hot Block)
+      2. 索引块分裂
+      3. Freelist争用
+    conditions:
+      - metric: wait_events.buffer_busy_waits.pct_db_time
+        operator: ">"
+        threshold: 5
+    recommendation: |
+      建议采取以下措施:
+      1. 识别热点数据块,检查是否为索引根块或序列表
+      2. 对于序列热点,考虑使用CACHE NOORDER序列
+      3. 对于索引热点,考虑使用反向索引(Reverse Key Index)
+      4. 增加PCTFREE减少块分裂
+      5. 使用ASSM避免Freelist争用
+      6. 考虑使用分区表分散热点

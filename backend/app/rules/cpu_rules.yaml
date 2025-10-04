@@ -1,0 +1,40 @@
+# CPU Related Diagnostic Rules
+
+rules:
+  - id: HIGH_CPU_USAGE
+    name: "CPU使用率过高"
+    category: cpu
+    severity: high
+    description: |
+      DB CPU占用DB Time的比例超过80%，表明数据库正在消耗大量CPU资源。
+      这可能导致系统响应缓慢，需要优化高CPU消耗的SQL语句。
+    conditions:
+      - metric: derived.cpu_utilization
+        operator: ">"
+        threshold: 80
+    recommendation: |
+      建议采取以下措施:
+      1. 检查Top SQL by CPU，优化高CPU消耗的SQL语句
+      2. 检查是否存在全表扫描，考虑添加合适的索引
+      3. 检查是否有runaway query（失控查询）
+      4. 如果是正常的业务高峰，考虑增加CPU资源
+      5. 检查是否有大量的硬解析，考虑使用绑定变量
+
+  - id: LOW_HARD_PARSE_RATIO
+    name: "硬解析率过高"
+    category: cpu
+    severity: medium
+    description: |
+      硬解析(Hard Parse)占总解析的比例过高，会消耗大量CPU资源。
+      硬解析需要进行语法分析、权限检查、执行计划生成等操作，非常耗时。
+    conditions:
+      - metric: derived.hard_parse_ratio
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 使用绑定变量（Bind Variables）替代字面值
+      2. 增加SHARED_POOL_SIZE参数
+      3. 检查CURSOR_SHARING参数设置
+      4. 检查应用程序是否频繁使用不同的SQL文本
+      5. 考虑使用连接池复用游标

@@ -1,0 +1,92 @@
+# SQL Performance Related Diagnostic Rules
+
+rules:
+  - id: HIGH_PARSE_TIME
+    name: "SQL解析时间过长"
+    category: sql
+    severity: medium
+    description: |
+      SQL解析(Parse)时间占DB Time超过5%。
+      过多的解析时间会浪费CPU资源,影响系统性能。
+      可能原因:
+      1. 硬解析比例过高
+      2. Shared Pool过小
+      3. 应用程序没有使用绑定变量
+    conditions:
+      - metric: load_profile.Parse time elapsed.pct_db_time
+        operator: ">"
+        threshold: 5
+    recommendation: |
+      建议采取以下措施:
+      1. 使用绑定变量替代字面值SQL
+      2. 增加SHARED_POOL_SIZE
+      3. 设置CURSOR_SHARING=FORCE(作为临时方案)
+      4. 检查是否有SQL注入风险导致大量唯一SQL
+      5. 使用连接池并启用语句缓存
+
+  - id: EXCESSIVE_FULL_TABLE_SCANS
+    name: "全表扫描过多"
+    category: sql
+    severity: high
+    description: |
+      每秒全表扫描次数过多,可能导致性能问题。
+      大量的全表扫描会:
+      1. 消耗大量I/O资源
+      2. 占用Buffer Cache空间
+      3. 增加CPU使用率
+    conditions:
+      - metric: load_profile.Full table scans.per_second
+        operator: ">"
+        threshold: 100
+    recommendation: |
+      建议采取以下措施:
+      1. 检查Top SQL by Elapsed Time
+      2. 为频繁查询的列添加索引
+      3. 收集或刷新表统计信息
+      4. 检查SQL语句的WHERE条件是否合理
+      5. 考虑使用分区表减少扫描范围
+      6. 对于小表的全表扫描,确认是否真的需要索引
+
+  - id: HIGH_SORTS_ON_DISK
+    name: "磁盘排序过多"
+    category: sql
+    severity: high
+    description: |
+      磁盘排序(Sorts on disk)比例过高。
+      当PGA内存不足时,排序操作会使用临时表空间,严重影响性能。
+      磁盘排序比内存排序慢数倍。
+    conditions:
+      - metric: derived.disk_sort_ratio
+        operator: ">"
+        threshold: 5
+    recommendation: |
+      建议采取以下措施:
+      1. 增加PGA_AGGREGATE_TARGET参数
+      2. 检查是否有大量的ORDER BY、GROUP BY、DISTINCT操作
+      3. 优化SQL语句,减少不必要的排序
+      4. 检查临时表空间的大小和I/O性能
+      5. 考虑使用索引避免排序(Index Range Scan有序)
+      6. 检查是否有笛卡尔积导致大量数据排序
+
+  - id: HIGH_EXECUTIONS_PER_PARSE
+    name: "SQL执行解析比过低"
+    category: sql
+    severity: medium
+    description: |
+      每次解析后的执行次数过低,表明游标复用率不高。
+      理想情况下,一个SQL应该被解析一次,执行多次。
+      执行解析比过低会导致:
+      1. 频繁的软解析消耗CPU
+      2. Shared Pool碎片化
+      3. Latch争用
+    conditions:
+      - metric: derived.executions_per_parse
+        operator: "<"
+        threshold: 5
+    recommendation: |
+      建议采取以下措施:
+      1. 使用连接池并保持连接活跃
+      2. 在应用程序中复用PreparedStatement
+      3. 增加SESSION_CACHED_CURSORS参数
+      4. 检查应用程序是否频繁关闭游标
+      5. 考虑使用连接池的语句缓存功能

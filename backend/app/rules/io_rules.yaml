@@ -1,0 +1,95 @@
+# I/O Related Diagnostic Rules
+
+rules:
+  - id: HIGH_DB_FILE_SCATTERED_READ
+    name: "db file scattered read等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      db file scattered read等待事件占DB Time超过25%。
+      这个等待事件通常与全表扫描和索引快速全扫描相关,表明:
+      1. 大量的多块读操作(全表扫描)
+      2. 缺失合适的索引导致全表扫描
+      3. 统计信息不准确导致错误的执行计划
+    conditions:
+      - metric: wait_events.db_file_scattered_read.pct_db_time
+        operator: ">"
+        threshold: 25
+    recommendation: |
+      建议采取以下措施:
+      1. 检查Top SQL by Elapsed Time,分析是否有大量全表扫描
+      2. 考虑添加合适的索引避免全表扫描
+      3. 收集或刷新统计信息: DBMS_STATS.GATHER_SCHEMA_STATS
+      4. 检查是否有大表,考虑使用分区
+      5. 对于必要的全表扫描,考虑使用并行查询
+      6. 检查存储系统的多块读性能
+
+  - id: HIGH_DIRECT_PATH_READ
+    name: "direct path read等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      direct path read等待事件占DB Time超过20%。
+      这个等待事件通常与直接路径读取相关,可能表明:
+      1. 大量的并行查询
+      2. 大表的全表扫描绕过Buffer Cache
+      3. 排序操作使用临时表空间
+    conditions:
+      - metric: wait_events.direct_path_read.pct_db_time
+        operator: ">"
+        threshold: 20
+    recommendation: |
+      建议采取以下措施:
+      1. 检查是否有大量并行查询,评估并行度设置
+      2. 检查排序操作,考虑增加PGA_AGGREGATE_TARGET
+      3. 对于大表扫描,评估是否需要添加索引
+      4. 检查临时表空间的大小和I/O性能
+      5. 考虑使用结果集缓存(Result Cache)
+
+  - id: HIGH_LOG_FILE_SYNC
+    name: "log file sync等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      log file sync等待事件占DB Time超过15%。
+      这个等待事件发生在COMMIT时,等待LGWR将日志写入磁盘。
+      可能表明:
+      1. 日志文件I/O性能不足
+      2. 频繁的COMMIT操作
+      3. 日志文件存储配置不当
+    conditions:
+      - metric: wait_events.log_file_sync.pct_db_time
+        operator: ">"
+        threshold: 15
+    recommendation: |
+      建议采取以下措施:
+      1. 减少不必要的COMMIT操作,使用批量提交
+      2. 将日志文件放在高速存储上(如SSD、NVME)
+      3. 确保日志文件不与数据文件共享同一磁盘
+      4. 检查LOG_BUFFER大小是否合适
+      5. 考虑使用COMMIT NOWAIT(如果业务允许)
+      6. 检查存储系统的写缓存配置
+
+  - id: HIGH_DB_FILE_PARALLEL_WRITE
+    name: "db file parallel write等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      db file parallel write等待事件占DB Time超过10%。
+      这个等待事件发生在DBWR将脏块写入数据文件时。
+      可能表明:
+      1. 数据文件I/O性能不足
+      2. Checkpoint过于频繁
+      3. Buffer Cache过小导致频繁写出
+    conditions:
+      - metric: wait_events.db_file_parallel_write.pct_db_time
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 检查数据文件I/O性能,考虑使用更快的存储
+      2. 增加Buffer Cache大小,减少脏块写出频率
+      3. 调整FAST_START_MTTR_TARGET参数
+      4. 检查是否有大量的DML操作
+      5. 考虑增加DBWR进程数(DB_WRITER_PROCESSES)
+      6. 检查表空间的自动扩展设置,避免频繁扩展

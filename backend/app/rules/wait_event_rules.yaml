@@ -1,0 +1,25 @@
+# Wait Event Related Diagnostic Rules
+
+rules:
+  - id: HIGH_DB_FILE_SEQUENTIAL_READ
+    name: "db file sequential read等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      db file sequential read等待事件占DB Time超过30%。
+      这个等待事件通常与索引扫描相关，可能表明:
+      1. 索引效率低下或缺失合适的索引
+      2. 单块读操作过多
+      3. 存储系统IO性能不足
+    conditions:
+      - metric: wait_events.db_file_sequential_read.pct_db_time
+        operator: ">"
+        threshold: 30
+    recommendation: |
+      建议采取以下措施:
+      1. 检查Top SQL，优化索引使用
+      2. 考虑添加或重建索引
+      3. 检查存储系统IO性能
+      4. 考虑使用SSD存储改善IO性能
+      5. 检查是否有碎片化的索引，进行重建
+      6. 调整DB_FILE_MULTIBLOCK_READ_COUNT参数（如适用）

@@ -1,0 +1,71 @@
+# Network and Application Related Diagnostic Rules
+
+rules:
+  - id: HIGH_SQL_NET_MORE_DATA
+    name: "SQL*Net网络传输等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      SQL*Net more data to client等待事件占DB Time超过10%。
+      这个等待发生在数据库向客户端发送大量数据时等待网络传输。
+      可能原因:
+      1. 客户端处理数据速度慢
+      2. 网络带宽不足
+      3. SQL返回结果集过大
+    conditions:
+      - metric: wait_events.SQL*Net_more_data_to_client.pct_db_time
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 优化SQL语句,减少返回的数据量(使用WHERE、分页)
+      2. 使用批量获取(Array Fetch)减少网络往返
+      3. 检查网络带宽是否充足
+      4. 在应用端使用结果集流式处理
+      5. 考虑使用数据压缩(Advanced Compression)
+      6. 检查客户端是否有性能瓶颈
+
+  - id: HIGH_SQL_NET_MESSAGE_FROM_CLIENT
+    name: "等待客户端响应时间过长"
+    category: wait_event
+    severity: low
+    description: |
+      SQL*Net message from client等待事件占DB Time超过30%。
+      这个等待通常是正常的空闲等待,表示数据库在等待客户端发送下一个请求。
+      但如果比例过高,可能表明:
+      1. 应用程序处理逻辑慢
+      2. 应用程序在处理业务逻辑时持有数据库连接
+      3. 连接池配置不当
+    conditions:
+      - metric: wait_events.SQL*Net_message_from_client.pct_db_time
+        operator: ">"
+        threshold: 30
+    recommendation: |
+      建议采取以下措施:
+      1. 优化应用程序业务逻辑
+      2. 不要在持有数据库连接时进行耗时操作
+      3. 使用连接池并合理配置连接数
+      4. 考虑异步处理模式
+      5. 检查应用服务器性能是否充足
+
+  - id: HIGH_RESMGR_WAIT
+    name: "资源管理器等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      resmgr相关等待事件占DB Time超过10%。
+      这些等待与资源管理器(Resource Manager)相关,表明:
+      1. 某些会话因为资源限制被限流
+      2. Consumer Group配额不足
+      3. 资源分配策略不合理
+    conditions:
+      - metric: wait_events.resmgr%.pct_db_time
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 检查Resource Manager计划和Consumer Groups配置
+      2. 调整资源分配比例,增加高优先级组的配额
+      3. 检查是否有低优先级任务占用过多资源
+      4. 考虑禁用Resource Manager(如果不需要)
+      5. 使用DBMS_RESOURCE_MANAGER查看资源使用统计

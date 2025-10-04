@@ -1,0 +1,92 @@
+# RAC (Real Application Cluster) Related Diagnostic Rules
+
+rules:
+  - id: HIGH_GC_CR_BLOCK_RECEIVE
+    name: "RAC全局缓存CR块接收等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      gc cr block receive等待事件占DB Time超过20%。
+      这是RAC环境特有的等待事件,发生在节点间传输一致性读(CR)块时。
+      高等待时间可能表明:
+      1. 节点间网络延迟高
+      2. 缓存融合(Cache Fusion)开销大
+      3. 应用程序设计不适合RAC(跨节点读写同一数据)
+    conditions:
+      - metric: wait_events.gc_cr_block_receive.pct_db_time
+        operator: ">"
+        threshold: 20
+    recommendation: |
+      建议采取以下措施:
+      1. 检查RAC节点间网络性能,确保使用专用高速互连
+      2. 使用Services实现应用程序分区,减少跨节点访问
+      3. 检查是否有大量的SELECT语句读取被其他节点频繁修改的数据
+      4. 考虑使用序列缓存(CACHE > 20)
+      5. 检查统计信息,确保所有节点执行计划一致
+      6. 考虑使用Instance Caging限制实例间资源争用
+
+  - id: HIGH_GC_CURRENT_BLOCK_RECEIVE
+    name: "RAC全局缓存Current块接收等待过高"
+    category: wait_event
+    severity: high
+    description: |
+      gc current block receive等待事件占DB Time超过15%。
+      这个等待发生在节点间传输当前版本(Current)块时,通常与DML操作相关。
+      高等待时间表明:
+      1. 多个节点频繁修改相同的数据块
+      2. 节点间网络性能问题
+      3. 缓存融合争用严重
+    conditions:
+      - metric: wait_events.gc_current_block_receive.pct_db_time
+        operator: ">"
+        threshold: 15
+    recommendation: |
+      建议采取以下措施:
+      1. 使用Services和Connection Load Balancing实现应用分区
+      2. 将修改同一数据的事务集中在同一节点
+      3. 检查节点间互连网络性能
+      4. 考虑使用分区表,按分区将数据分散到不同节点
+      5. 避免在不同节点上并发修改同一张小表
+      6. 检查是否有索引块分裂导致的跨节点争用
+
+  - id: HIGH_GC_BUFFER_BUSY
+    name: "RAC全局缓存Buffer繁忙等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      gc buffer busy等待事件占DB Time超过10%。
+      这个等待发生在等待其他节点释放Buffer时。
+      通常与数据块热点相关,在RAC环境中被放大。
+    conditions:
+      - metric: wait_events.gc_buffer_busy.pct_db_time
+        operator: ">"
+        threshold: 10
+    recommendation: |
+      建议采取以下措施:
+      1. 识别热点数据块,通常是索引根块或序列表
+      2. 使用反向索引(Reverse Key Index)减少索引热点
+      3. 对于序列,使用CACHE NOORDER并增加缓存大小
+      4. 考虑使用应用程序级别的分区策略
+      5. 检查是否可以使用本地索引替代全局索引
+      6. 使用ASSM(Automatic Segment Space Management)
+
+  - id: HIGH_GCS_LOG_FLUSH_SYNC
+    name: "RAC GCS日志刷新同步等待过高"
+    category: wait_event
+    severity: medium
+    description: |
+      gcs log flush sync等待事件占DB Time超过8%。
+      这个等待发生在节点间同步日志刷新时,通常与COMMIT操作相关。
+      在RAC环境中,COMMIT需要跨节点同步。
+    conditions:
+      - metric: wait_events.gcs_log_flush_sync.pct_db_time
+        operator: ">"
+        threshold: 8
+    recommendation: |
+      建议采取以下措施:
+      1. 减少频繁的COMMIT操作,使用批量提交
+      2. 确保所有节点的日志文件都在高速存储上
+      3. 检查节点间网络延迟
+      4. 考虑使用COMMIT NOWAIT(如业务允许)
+      5. 检查LOG_BUFFER大小设置
+      6. 评估是否可以使用异步提交减少等待

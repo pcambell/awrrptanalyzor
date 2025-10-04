@@ -1,0 +1,40 @@
+# Memory Related Diagnostic Rules
+
+rules:
+  - id: LOW_BUFFER_HIT_RATIO
+    name: "Buffer Cache命中率过低"
+    category: memory
+    severity: high
+    description: |
+      Buffer Cache命中率低于90%，表明大量数据需要从磁盘读取。
+      这会导致物理IO增加，严重影响数据库性能。
+    conditions:
+      - metric: derived.buffer_hit_ratio
+        operator: "<"
+        threshold: 90
+    recommendation: |
+      建议采取以下措施:
+      1. 增加DB_CACHE_SIZE或SGA_TARGET参数
+      2. 检查是否有全表扫描，优化SQL语句
+      3. 检查是否有不合理的索引，考虑添加或优化索引
+      4. 检查是否有大量的直接路径读(Direct Path Read)
+      5. 分析Top Segments by Physical Reads，优化热点对象访问
+
+  - id: HIGH_PHYSICAL_READS
+    name: "物理读过高"
+    category: memory
+    severity: medium
+    description: |
+      物理读(Physical Reads)过高，说明大量数据需要从磁盘加载。
+      这通常是由于Buffer Cache不足或SQL语句效率低下导致的。
+    conditions:
+      - metric: load_profile.Physical read (blocks).per_second
+        operator: ">"
+        threshold: 10000
+    recommendation: |
+      建议采取以下措施:
+      1. 增加Buffer Cache大小
+      2. 优化高物理读的SQL语句
+      3. 检查索引是否合理
+      4. 考虑使用表分区减少扫描范围
+      5. 对于大表的全表扫描，考虑使用并行查询
